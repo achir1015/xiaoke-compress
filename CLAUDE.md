@@ -18,7 +18,7 @@
 - `electron/ffmpeg.cjs`：執行內建 FFmpeg（ffmpeg-static，打包時放 resources/bin）：probe、縮圖、壓縮（-progress 進度、取消、先寫 .part 再改名、兩趟紀錄檔放暫存工作目錄）、硬體偵測（試編碼 0.5 秒）、產生範例影片（userData/sample）。
 - `electron/main.cjs`：xkcompress://（網頁）、xkmedia://f/m?p=路徑（本機影音，支援 Range，只開放使用者加入過的檔案與輸出檔）；fitZoom 讓高縮放螢幕整頁縮小；XK_USER_DATA、XK_QUERY 給測試用。
 - `src/main.ts`：佇列、設定表單（id＝Settings 欄位名）、比較視窗（左右拖曳、滾輪放大、修剪偏移同步）、修剪視窗、`window.xkApp`（教學與 e2e 用）。
-- `src/xiaoke.ts`：語音動態教學 13 步（會真的加範例影片並壓縮、打開比較視窗；結束還原設定並移除範例）、檢查更新（GitHub Releases：achir1015/xiaoke-compress，repo 尚未建立）。
+- `src/xiaoke.ts`：語音動態教學 13 步（會真的加範例影片並壓縮、打開比較視窗；結束還原設定並移除範例）、檢查更新（GitHub Releases：achir1015/xiaoke-compress）。
 
 ## 指令（Node 22：`%LOCALAPPDATA%\nvm\v22.22.3\node.exe`，PATH 裡的是 20）
 
@@ -33,7 +33,8 @@ python scripts/make_icon.py                   # 圖示（小柯＋被箭頭壓�
 
 ## 狀態
 
-- 2026-11-18 Windows v1.0.0：已 /S 安裝到 %LOCALAPPDATA%\Programs\XiaokeCompress（桌面＋開始選單捷徑），安裝檔副本在 `../安裝檔`；開發版與已安裝版 e2e 27 項全過（含 Intel QSV 硬體加速、教學）。尚未 git push、未建 GitHub repo。
+- 2026-11-18 Windows v1.0.0：已 /S 安裝到 %LOCALAPPDATA%\Programs\XiaokeCompress（桌面＋開始選單捷徑），安裝檔副本在 `../安裝檔`；開發版與已安裝版 e2e 27 項全過（含 Intel QSV 硬體加速、教學）。
+- 2026-11-18 使用者同意後建立公開 repo https://github.com/achir1015/xiaoke-compress（main），v1.0.0 Release 手動上傳安裝版＋免安裝版（無 CI，發佈說明 .github/release-notes.md）；e2e/update-check.mjs 實測已安裝版讀得到 v1.0.0 與安裝檔。沒有 gh CLI：用 git credential fill 取 token 打 API。
 
 ## 坑
 
