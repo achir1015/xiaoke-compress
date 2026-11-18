@@ -1,6 +1,6 @@
 {
   "name": "xiaoke-compress",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "小柯機器人MP4影片壓縮工具：影片、圖片、音訊一鍵壓縮成小檔案，可指定檔案大小、解析度、編碼，並有語音動態教學",
   "scripts": {
     "test": "vitest run",

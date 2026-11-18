@@ -417,7 +417,7 @@ $('#queue').addEventListener('click', async (e) => {
       if (it.out) await xk.shell.reveal(it.out);
       break;
     case 'trash':
-      if (it.out && confirm(`把「${it.out.replace(/^.*[\\/]/, '')}」移到資源回收筒？`)) {
+      if (it.out && confirm(`把「${it.out.replace(/^.*[\\/]/, '')}」移到${xk.platform === 'darwin' ? '垃圾桶' : '資源回收筒'}？`)) {
         await xk.shell.trash(it.out);
         it.status = 'ready';
         it.out = undefined;

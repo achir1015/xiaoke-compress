@@ -266,6 +266,16 @@ export function encoderFor(s: Settings): { name: string; hw: boolean } {
 
 const fmtTime = (t: number) => t.toFixed(3);
 
+/** VideoToolbox 品質模式：每像素位元數隨品質 0.02～0.14（H.265 打七折），不超過原檔畫面位元率的九成。 */
+export function vtQualityKbps(info: MediaInfo, s: Settings, codec: VideoCodec, size: { width: number; height: number }): number {
+  const fps = s.fps || info.fps || 30;
+  const bpp = (0.02 + (clamp(s.quality, 0, 100) / 100) * 0.12) * (codec === 'h265' ? 0.7 : 1);
+  let kbps = (size.width * size.height * fps * bpp) / 1000;
+  const srcVideo = info.bitrate ? info.bitrate - (info.abitrate || 0) : 0;
+  if (srcVideo > 0) kbps = Math.min(kbps, srcVideo * 0.9);
+  return Math.max(150, Math.round(kbps));
+}
+
 /**
  * 產生 FFmpeg 參數。
  * @param input  輸入檔路徑（桌面版）或虛擬檔名（線上版）
@@ -342,7 +352,12 @@ function videoPlan(info: MediaInfo, s: Settings, input: string, output: string, 
       v.push('-quality', ['speed', 'balanced', 'quality'][s.speed]);
       if (!vKbps) v.push('-rc', 'cqp', '-qp_i', String(q), '-qp_p', String(q + 2));
     } else if (s.hw === 'videotoolbox') {
-      if (!vKbps) v.push('-q:v', String(Math.round(30 + s.quality * 0.5)));
+      // Intel Mac 的 VideoToolbox 不支援固定品質（-q:v），一律依畫質換算成位元率
+      if (!vKbps) {
+        const kbps = vtQualityKbps(info, s, codec, size);
+        v.push('-b:v', `${kbps}k`, '-maxrate', `${Math.round(kbps * 1.5)}k`, '-bufsize', `${kbps * 2}k`);
+      }
+      v.push('-allow_sw', '1');
     }
   } else if (codec === 'h264') {
     v.push('-preset', presetX);

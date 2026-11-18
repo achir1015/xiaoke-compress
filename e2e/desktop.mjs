@@ -3,7 +3,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 const PORT = 9367;
 const exe = process.env.XK_EXE;
@@ -12,7 +12,10 @@ const WANT_GUIDE = process.argv.includes('--guide');
 const electron = MAC
   ? join(process.cwd(), 'node_modules', 'electron', 'dist', 'Electron.app', 'Contents', 'MacOS', 'Electron')
   : join(process.cwd(), 'node_modules', 'electron', 'dist', 'electron.exe');
-const FF = join(process.cwd(), 'node_modules', 'ffmpeg-static', MAC ? 'ffmpeg' : 'ffmpeg.exe');
+// 產生測試素材用的 FFmpeg：測打包版時直接用 App 內附的（Mac 測試機不必 npm install）
+const FF = process.env.XK_FF
+  || (exe ? (MAC ? join(dirname(exe), '..', 'Resources', 'bin', 'ffmpeg') : join(dirname(exe), 'resources', 'bin', 'ffmpeg.exe'))
+    : join(process.cwd(), 'node_modules', 'ffmpeg-static', MAC ? 'ffmpeg' : 'ffmpeg.exe'));
 const work = mkdtempSync(join(tmpdir(), 'xkc-e2e-'));
 const shots = process.env.XK_SHOTS || work;
 mkdirSync(shots, { recursive: true });

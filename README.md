@@ -17,8 +17,8 @@
 
 | 平台 | 狀態 |
 | --- | --- |
-| Windows 11 | v1.0.0 |
-| macOS | 規劃中 |
+| Windows 11 | v1.0.0 起 |
+| macOS（Apple 晶片／Intel） | v1.1.0 起 |
 | 線上版（網頁） | 規劃中 |
 | iPhone／iPad（線上安裝） | 規劃中 |
 | Android | 規劃中 |

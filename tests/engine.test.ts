@@ -83,6 +83,17 @@ describe('解析與計算', () => {
     expect(q.passes[0]).toContain('h264_nvenc');
   });
 
+  it('Mac VideoToolbox 品質模式換算成位元率', () => {
+    const info = parseProbe(PROBE_PHONE);
+    const p = buildPlan('video', info, S({ hw: 'videotoolbox', quality: 60 }), 'in.mov', 'out.mp4', 0);
+    const args = p.passes[0];
+    expect(args).toContain('h264_videotoolbox');
+    expect(args).not.toContain('-q:v');
+    const kbps = parseInt(args[args.indexOf('-b:v') + 1], 10);
+    expect(kbps).toBeGreaterThan(2000);
+    expect(kbps).toBeLessThan((15873 - 174) * 0.9 + 1);
+  });
+
   it('WebM 自動改 VP9＋Opus', () => {
     const info = parseProbe(PROBE_PHONE);
     const p = buildPlan('video', info, S({ container: 'webm' }), 'in.mov', 'out.webm', 0);
