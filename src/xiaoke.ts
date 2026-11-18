@@ -71,6 +71,9 @@ export interface ItemView {
 export interface AppHook {
   addSample(): Promise<string | null>;
   addPaths(paths: string[]): Promise<string[]>;
+  addFiles(files: File[]): Promise<string[]>;
+  web(): boolean;
+  ready?: () => boolean;
   setTab(t: 'video' | 'image' | 'audio'): void;
   setMode(m: Settings['mode']): void;
   setSetting(k: string, v: unknown): void;
@@ -154,7 +157,7 @@ const STEPS: Step[] = [
   {
     target: () => $('#drop'),
     text: '第一步，加入檔案。把影片、圖片或音訊直接拖曳到這個框框裡，也可以按「選擇檔案」，一次選很多個，連整個資料夾拖進來都可以。沒有影片的話，按「試用範例影片」，我現在就幫你加一支。',
-    web: '第一步，加入檔案。把影片、圖片或音訊拖曳到這個框框裡，或按「選擇檔案」。檔案都在你的裝置上處理，不會上傳到網路。',
+    web: '第一步，加入檔案。把影片、圖片或音訊拖曳到這個框框裡，或按「選擇檔案」，一次可以選很多個。檔案都在你的瀏覽器裡處理，不會上傳到網路。按「試用範例影片」，我現在就用瀏覽器做一支範例影片給你。',
     demo: async () => {
       await sleep(5200);
       await press(btn('#sample'));
@@ -220,7 +223,7 @@ const STEPS: Step[] = [
     },
     target: () => $('#adv'),
     text: '「進階設定」可以選解析度、影格率和編碼。H.264 到處都能播；H.265 同樣畫質可以再小四成左右。電腦有 NVIDIA、Intel 或 AMD 顯示卡的話，打開「硬體加速」會快很多。勾選「移除拍攝資訊」，還能順便刪掉照片和影片裡的 GPS 位置。',
-    web: '「進階設定」可以選解析度、影格率和編碼。H.264 到處都能播；H.265 同樣畫質可以再小四成左右。勾選「移除拍攝資訊」，還能順便刪掉影片裡的 GPS 位置。',
+    web: '「進階設定」可以選解析度、影格率和編碼。H.264 到處都能播；H.265 同樣畫質可以再小四成左右，瀏覽器不支援時會自動改用 H.264。線上版會自動使用瀏覽器的硬體編碼，速度很快。勾選「移除拍攝資訊」，還能順便刪掉影片裡的 GPS 位置。',
   },
   {
     before: () => {
@@ -228,6 +231,7 @@ const STEPS: Step[] = [
     },
     target: () => $('#f-out'),
     text: '壓縮好的檔案預設放在原檔旁邊，檔名後面加上「壓縮」兩個字，原檔不會被覆蓋。也可以改成存到自訂的資料夾。',
+    web: '壓縮好的檔案會用下載的方式存到你的電腦或手機，檔名後面加上「壓縮」兩個字，原檔不會被改動。',
   },
   {
     target: () => $('#start'),
@@ -242,6 +246,7 @@ const STEPS: Step[] = [
   {
     target: () => demoItem() ?? $('#queue'),
     text: '完成了！清單會顯示壓縮前後的大小和省下的百分比。按「開啟」可以播放，按「資料夾」會打開存檔的位置。',
+    web: '完成了！清單會顯示壓縮前後的大小和省下的百分比。按綠色的「下載」就能存檔，檔案很多時可以按上面的「全部下載」。',
   },
   {
     before: () => {

@@ -485,6 +485,116 @@ function imagePlan(info: MediaInfo, s: Settings, input: string, output: string):
   return { passes: [args], duration: 0, ext: fmt, summary: `${summary}・${w}×${h}`, warnings: [], estimate: 0 };
 }
 
+// --- 瀏覽器（WebCodecs）用的壓縮計畫 ----------------------------------------------------
+
+export interface WebVideoPlan {
+  width: number;
+  height: number;
+  /** 0＝維持原影格率 */
+  fps: number;
+  /** 畫面位元率 kb/s */
+  videoKbps: number;
+  /** 聲音位元率 kb/s；0＝不要聲音 */
+  audioKbps: number;
+  /** 依序嘗試的影像編碼（mediabunny 的名稱） */
+  videoCodecs: ('avc' | 'hevc' | 'vp9' | 'av1')[];
+  audioCodecs: ('aac' | 'opus')[];
+  container: Container;
+  /** 指定大小／比例模式的目標總位元數（bytes），0＝品質優先 */
+  targetBytes: number;
+  duration: number;
+  summary: string;
+  warnings: string[];
+  estimate: number;
+}
+
+const WEB_CODEC: Record<VideoCodec, 'avc' | 'hevc' | 'vp9' | 'av1'> = { h264: 'avc', h265: 'hevc', vp9: 'vp9', av1: 'av1' };
+
+/** 瀏覽器的硬體編碼沒有 CRF，品質模式也換算成位元率（與 Mac VideoToolbox 相同的規則）。 */
+export function webVideoPlan(info: MediaInfo, s: Settings, inputBytes: number): WebVideoPlan {
+  const warnings: string[] = [];
+  const dur = clipDuration(info, s);
+  const container = s.container;
+  let codec: VideoCodec = s.codec;
+  if (container === 'webm' && (codec === 'h264' || codec === 'h265')) {
+    codec = 'vp9';
+    warnings.push('WebM 不支援 H.264／H.265，已改用 VP9。');
+  }
+  let total = targetTotalKbps(info, s, inputBytes);
+  if (total && info.bitrate && total >= info.bitrate * 0.9) {
+    warnings.push('原檔已經比目標小，改用「品質優先（均衡）」壓縮。');
+    total = 0;
+    s = { ...s, quality: Math.min(s.quality, 60) };
+  }
+  const aKbps = info.hasAudio && s.audio !== 'mute' ? audioKbpsFor(s, total) : 0;
+  let vKbps = total ? Math.floor(total - aKbps) : 0;
+  if (total && vKbps < 60) {
+    warnings.push(`目標太小：影片長 ${Math.round(dur)} 秒，最少要給畫面 60 kb/s，結果會比目標大一些。`);
+    vKbps = 60;
+  }
+  const size = outputSize(info, s, vKbps);
+  if (s.res === 'auto' && total && Math.min(size.width, size.height) < Math.min(info.width, info.height))
+    warnings.push(`為了達到目標大小，自動把解析度降到 ${size.width}×${size.height}。`);
+  if (!vKbps) vKbps = vtQualityKbps(info, s, codec, size);
+  // 指定的編碼不支援時依序退回：H.265 → H.264；AV1 → VP9 → H.264（WebM 只能 VP9／AV1）
+  const order: VideoCodec[] = container === 'webm' ? [codec, codec === 'av1' ? 'vp9' : 'av1'] : [codec, ...(['h265', 'h264'] as VideoCodec[]).filter((c) => c !== codec)];
+  if (container !== 'webm' && (codec === 'av1' || codec === 'vp9')) order.splice(1, 0, codec === 'av1' ? 'vp9' : 'av1');
+  const fps = s.fps > 0 && (!info.fps || s.fps < info.fps - 0.5) ? s.fps : 0;
+  const label = { h264: 'H.264', h265: 'H.265', vp9: 'VP9', av1: 'AV1' }[codec];
+  return {
+    width: size.width,
+    height: size.height,
+    fps,
+    videoKbps: vKbps,
+    audioKbps: aKbps,
+    videoCodecs: [...new Set(order)].map((c) => WEB_CODEC[c]),
+    audioCodecs: container === 'webm' ? ['opus'] : ['aac', 'opus'],
+    container,
+    targetBytes: total ? (total * 1000 * dur) / 8 / 0.96 : 0,
+    duration: dur,
+    summary: `${label}（瀏覽器硬體編碼）・${size.width}×${size.height}・${total ? `目標 ${(total / 1000).toFixed(2)} Mb/s` : `品質 ${s.quality}`}`,
+    warnings,
+    estimate: ((vKbps + aKbps) * 1000 * dur) / 8,
+  };
+}
+
+export interface WebAudioPlan {
+  format: 'mp3' | 'm4a' | 'opus';
+  kbps: number;
+  channels: number;
+  duration: number;
+  summary: string;
+  warnings: string[];
+  estimate: number;
+}
+
+export function webAudioPlan(info: MediaInfo, s: Settings, inputBytes: number): WebAudioPlan {
+  const warnings: string[] = [];
+  const total = targetTotalKbps(info, s, inputBytes);
+  let kbps = total ? Math.min(Math.floor(total), s.audioFileKbps) : s.audioFileKbps;
+  if (total && kbps < 24) {
+    warnings.push('目標太小，聲音最少需要 24 kb/s。');
+    kbps = 24;
+  }
+  kbps = Math.min(kbps, 320);
+  const dur = clipDuration(info, s);
+  return {
+    format: s.audioFormat,
+    kbps,
+    channels: s.audioMono ? 1 : 2,
+    duration: dur,
+    summary: `${s.audioFormat.toUpperCase()}・${kbps} kb/s${s.audioMono ? '・單聲道' : ''}`,
+    warnings,
+    estimate: (kbps * 1000 * dur) / 8,
+  };
+}
+
+/** PNG 減色的顏色數；品質 100 回傳 0（無損）。與桌面版 FFmpeg 的規則相同。 */
+export function pngColors(quality: number): number {
+  const q = clamp(quality, 1, 100);
+  return q >= 100 ? 0 : clamp(Math.round(16 + (q / 100) * 240), 16, 256);
+}
+
 // --- 顯示 --------------------------------------------------------------------------
 
 export function fmtBytes(n: number): string {

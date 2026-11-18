@@ -24,7 +24,7 @@ https://github.com/user-attachments/assets/ccf413aa-00d8-4201-9962-4baef69e6d4b
 | --- | --- |
 | Windows 11 | v1.0.0 起 |
 | macOS（Apple 晶片／Intel） | v1.1.0 起 |
-| 線上版（網頁） | 規劃中 |
+| 線上版（網頁） | v1.2.0 起：https://achir1015.github.io/xiaoke-compress/ |
 | iPhone／iPad（線上安裝） | 規劃中 |
 | Android | 規劃中 |
 

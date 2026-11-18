@@ -1,18 +1,6 @@
 import './style.css';
-import {
-  DEFAULTS,
-  QUALITY_PRESETS,
-  buildPlan,
-  fmtBytes,
-  fmtDuration,
-  kindOf,
-  outputName,
-  parseProbe,
-  type Hw,
-  type Kind,
-  type MediaInfo,
-  type Settings,
-} from './engine';
+import { DEFAULTS, QUALITY_PRESETS, fmtBytes, fmtDuration, kindOf, type Hw, type Kind, type MediaInfo, type Settings } from './engine';
+import { desktopBackend, type Backend, type SourceRef } from './backend';
 import { ROBOT_SVG, checkUpdate, desktop, guideOnFirstRun, initUpdateButton, startGuide, type HwInfo } from './xiaoke';
 
 declare const __APP_VERSION__: string;
@@ -24,6 +12,8 @@ type Tab = Kind;
 
 interface Item {
   id: string;
+  src: SourceRef;
+  /** 顯示用：桌面版是完整路徑，線上版是檔名 */
   path: string;
   name: string;
   dir: string;
@@ -35,7 +25,9 @@ interface Item {
   progress: number;
   ms: number;
   out?: string;
+  outName?: string;
   outSize?: number;
+  engine?: string;
   error?: string;
   warnings: string[];
   summary: string;
@@ -83,7 +75,9 @@ const $$ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode =
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const xk = desktop();
-const mediaUrl = (p: string) => `xkmedia://f/m?p=${encodeURIComponent(p)}`;
+/** 桌面版直接建立；線上版在 init() 動態載入（WebCodecs／ffmpeg.wasm 只有網頁需要） */
+let be: Backend = xk ? desktopBackend(xk) : (null as unknown as Backend);
+const isWeb = !xk;
 
 function toast(msg: string, ms = 3200) {
   const t = document.createElement('div');
@@ -212,8 +206,8 @@ function setTab(t: Tab) {
 }
 
 async function pickOutDir() {
-  if (!xk) return;
-  const d = await xk.pickFolder(ui.outDir);
+  if (isWeb) return;
+  const d = await be.pickFolder(ui.outDir);
   if (d) {
     ui.outDir = d;
     ui.outMode = 'custom';
@@ -236,31 +230,26 @@ function fillHwOptions() {
 
 // --- 檔案清單 ------------------------------------------------------------------------
 
-async function addPaths(paths: string[], opts: { demo?: boolean } = {}): Promise<Item[]> {
-  if (!xk) {
-    showWebNote();
-    return [];
-  }
-  const files = await xk.media.expand(paths);
+async function addRefs(refs: SourceRef[], opts: { demo?: boolean } = {}): Promise<Item[]> {
   const added: Item[] = [];
   let skipped = 0;
-  for (const p of files) {
-    const kind = kindOf(p);
-    if (!kind) {
+  for (const src of refs) {
+    if (!kindOf(src.name)) {
       skipped++;
       continue;
     }
-    if (items.some((x) => x.path.toLowerCase() === p.toLowerCase() && x.status !== 'done')) continue;
+    if (src.path && items.some((x) => x.src.path?.toLowerCase() === src.path!.toLowerCase() && x.status !== 'done')) continue;
+    if (src.file && items.some((x) => x.src.file === src.file && x.status !== 'done')) continue;
+    if (refs.length > 1) setStatus(`正在讀取 ${src.name}…`);
     try {
-      const r = await xk.media.probe(p);
-      const info = parseProbe(r.probe);
-      const realKind: Kind = kind === 'video' && !info.hasVideo && info.hasAudio ? 'audio' : kind;
+      const { info, kind: realKind } = await be.probe(src);
       const it: Item = {
         id: `f${++seq}`,
-        path: r.path,
-        name: r.name,
-        dir: r.dir,
-        size: r.size,
+        src,
+        path: src.path ?? src.name,
+        name: src.name,
+        dir: src.dir,
+        size: src.size,
         kind: realKind,
         info,
         thumb: null,
@@ -277,15 +266,16 @@ async function addPaths(paths: string[], opts: { demo?: boolean } = {}): Promise
       added.push(it);
       renderQueue();
       if (realKind !== 'audio') {
-        void xk.media.thumb(r.path, info.duration).then((t) => {
+        void be.thumb(src, info, realKind).then((t) => {
           it.thumb = t;
           renderItem(it);
         });
       }
     } catch (e) {
-      toast(`${p.replace(/^.*[\\/]/, '')}：${(e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')}`, 5000);
+      toast(`${src.name}：${errText(e)}`, 5000);
     }
   }
+  if (refs.length > 1 && !running) setStatus('準備好了');
   if (skipped) toast(`有 ${skipped} 個檔案不是影片、圖片或音訊，已略過`);
   if (added.length) {
     const kinds = new Set(added.map((x) => x.kind));
@@ -300,7 +290,7 @@ function refreshPlans() {
     if (it.status === 'ready' || it.status === 'cancelled' || it.status === 'error') {
       try {
         const s = settingsFor(it);
-        const plan = buildPlan(it.kind, it.info, s, it.path, outputName(it.name, it.kind, s), it.size);
+        const plan = be.preview({ src: it.src, kind: it.kind, info: it.info, settings: s });
         it.summary = plan.summary;
         it.warnings = plan.warnings;
         if (plan.estimate && (S.mode !== 'quality' || it.kind === 'audio')) it.summary += `・預估 ≈ ${fmtBytes(plan.estimate)}`;
@@ -334,7 +324,8 @@ function itemHtml(it: Item): string {
     const bad = pct >= 1;
     body = `<div class="result"><span class="from">${fmtBytes(it.size)}</span>→<span class="to">${fmtBytes(it.outSize!)}</span><span class="pct${bad ? ' bad' : ''}">${bad ? `+${Math.round((pct - 1) * 100)}%` : `-${Math.round((1 - pct) * 100)}%`}</span><span class="muted">${(it.ms / 1000).toFixed(1)} 秒</span></div>`;
     if (bad) body += `<div class="warn">壓縮後沒有變小（原檔已經很精簡），建議保留原檔。</div>`;
-    body += `<div class="sub" title="${esc(it.out!)}">${esc(it.out!.replace(/^.*[\\/]/, ''))}</div>`;
+    body += `<div class="sub" title="${esc(isWeb ? it.outName! : it.out!)}">${esc(it.outName ?? '')}${it.engine ? `・${esc(it.engine)}` : ''}</div>`;
+    body += it.warnings.map((w) => `<div class="warn">${esc(w)}</div>`).join('');
   } else if (it.status === 'error') {
     body = `<div class="err">失敗：${esc(it.error ?? '')}</div>`;
   } else {
@@ -343,8 +334,10 @@ function itemHtml(it: Item): string {
   const acts: string[] = [];
   if (it.status === 'running') acts.push('<button type="button" data-act="cancel">取消</button>');
   if (it.status === 'done') {
-    acts.push('<button type="button" data-act="compare">⇆ 比較</button>', '<button type="button" data-act="open">▶ 開啟</button>', '<button type="button" data-act="reveal">📂 資料夾</button>');
-    if (it.outSize! >= it.size) acts.push('<button type="button" data-act="trash">刪除結果</button>');
+    acts.push('<button type="button" data-act="compare">⇆ 比較</button>');
+    if (isWeb) acts.push('<button type="button" data-act="open" class="dl">⬇ 下載</button>');
+    else acts.push('<button type="button" data-act="open">▶ 開啟</button>', '<button type="button" data-act="reveal">📂 資料夾</button>');
+    if (it.outSize! >= it.size && !isWeb) acts.push('<button type="button" data-act="trash">刪除結果</button>');
     acts.push('<button type="button" data-act="again">再壓一次</button>');
   }
   if (it.status === 'error' || it.status === 'cancelled') acts.push('<button type="button" data-act="again">重試</button>');
@@ -393,32 +386,33 @@ function setStatus(text: string, p = -1) {
 $('#queue').addEventListener('click', async (e) => {
   const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-act]');
   const li = (e.target as HTMLElement).closest<HTMLLIElement>('li[data-id]');
-  if (!b || !li || !xk) return;
+  if (!b || !li) return;
   const it = items.find((x) => x.id === li.dataset.id);
   if (!it) return;
   switch (b.dataset.act) {
     case 'cancel':
-      await xk.job.cancel(it.id);
+      await be.cancel(it.id);
       break;
     case 'remove':
-      items.splice(items.indexOf(it), 1);
-      renderQueue();
+      removeItem(it);
       break;
     case 'again':
+      if (isWeb && it.out) void be.discard(it.out);
       it.status = 'ready';
       it.progress = 0;
       it.error = undefined;
+      it.out = undefined;
       refreshPlans();
       break;
     case 'open':
-      if (it.out) await xk.shell.open(it.out);
+      if (it.out) await be.open(it.out, it.outName ?? '');
       break;
     case 'reveal':
-      if (it.out) await xk.shell.reveal(it.out);
+      if (it.out) await be.reveal(it.out);
       break;
     case 'trash':
-      if (it.out && confirm(`把「${it.out.replace(/^.*[\\/]/, '')}」移到${xk.platform === 'darwin' ? '垃圾桶' : '資源回收筒'}？`)) {
-        await xk.shell.trash(it.out);
+      if (it.out && confirm(`把「${it.outName}」移到${xk?.platform === 'darwin' ? '垃圾桶' : '資源回收筒'}？`)) {
+        await be.discard(it.out);
         it.status = 'ready';
         it.out = undefined;
         refreshPlans();
@@ -437,24 +431,44 @@ $('#queue').addEventListener('click', async (e) => {
 
 const errText = (e: unknown) => String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
 
+/** 從清單移除（線上版順便釋放記憶體裡的壓縮結果） */
+function removeItem(it: Item) {
+  const i = items.indexOf(it);
+  if (i < 0 || it.status === 'running') return;
+  items.splice(i, 1);
+  if (isWeb && it.out) void be.discard(it.out);
+  renderQueue();
+}
+
+let progressHook: ((it: Item) => void) | null = null;
+
 async function runOne(it: Item): Promise<void> {
   const s = settingsFor(it);
-  const name = outputName(it.name, it.kind, s);
   const dir = ui.outMode === 'custom' && ui.outDir ? ui.outDir : it.dir;
-  const out = await xk!.media.outPath(dir, name);
-  const plan = buildPlan(it.kind, it.info, s, it.path, out, it.size);
   it.status = 'running';
   it.progress = 0;
   it.ms = 0;
-  it.warnings = plan.warnings;
   currentId = it.id;
   renderItem(it);
+  let last = 0;
   try {
-    const r = await xk!.job.run(it.id, { input: it.path, output: out, passes: plan.passes, duration: plan.duration });
+    const r = await be.run({ id: it.id, src: it.src, kind: it.kind, info: it.info, settings: s, outDir: dir }, (p, ms) => {
+      it.progress = p;
+      it.ms = ms;
+      // 網頁版進度很密集：每 150ms 更新一次畫面就好
+      if (Date.now() - last > 150 || p >= 1) {
+        last = Date.now();
+        renderItem(it);
+        progressHook?.(it);
+      }
+    });
     it.status = 'done';
-    it.out = r.output;
+    it.out = r.out;
+    it.outName = r.outName;
     it.outSize = r.size;
     it.ms = r.ms;
+    it.engine = isWeb ? r.engine : undefined;
+    it.warnings = r.warnings ?? [];
   } catch (e) {
     const msg = errText(e);
     if (/已取消/.test(msg)) it.status = 'cancelled';
@@ -469,7 +483,7 @@ async function runOne(it: Item): Promise<void> {
 }
 
 async function runAll(): Promise<void> {
-  if (running || !xk) return;
+  if (running) return;
   const todo = items.filter((x) => x.status === 'ready');
   if (!todo.length) return;
   running = true;
@@ -477,14 +491,8 @@ async function runAll(): Promise<void> {
   renderSummary();
   const t0 = Date.now();
   let n = 0;
-  const off = xk.job.onProgress(({ id, p, ms }) => {
-    const it = items.find((x) => x.id === id);
-    if (!it || it.status !== 'running') return;
-    it.progress = p;
-    it.ms = ms;
-    renderItem(it);
-    setStatus(`正在壓縮 ${n + 1} / ${todo.length}：${it.name}`, (n + p) / todo.length);
-  });
+  progressHook = (it) => setStatus(`正在壓縮 ${n + 1} / ${todo.length}：${it.name}`, (n + it.progress) / todo.length);
+  const off = () => (progressHook = null);
   try {
     for (const it of todo) {
       if (stopRequested) break;
@@ -519,46 +527,38 @@ $('#start').addEventListener('click', () => {
 });
 $('#stop').addEventListener('click', async () => {
   stopRequested = true;
-  if (currentId && xk) await xk.job.cancel(currentId);
+  if (currentId) await be.cancel(currentId);
 });
 $('#clear-done').addEventListener('click', () => {
-  for (let i = items.length - 1; i >= 0; i--) if (items[i].status === 'done') items.splice(i, 1);
-  renderQueue();
+  for (const it of items.filter((x) => x.status === 'done')) removeItem(it);
 });
 $('#clear-all').addEventListener('click', () => {
   if (running) return;
-  items.length = 0;
-  renderQueue();
+  for (const it of [...items]) removeItem(it);
   setStatus('準備好了', 0);
+});
+$('#dl-all').addEventListener('click', async () => {
+  for (const it of items.filter((x) => x.status === 'done' && x.out)) {
+    await be.open(it.out!, it.outName ?? '');
+    await sleep(400); // 瀏覽器連續下載太快會被擋
+  }
 });
 
 // --- 加入檔案 ------------------------------------------------------------------------
 
-function showWebNote() {
-  const n = $('#web-note');
-  n.innerHTML = '線上版正在製作中，目前請先使用 <a href="https://github.com/achir1015/xiaoke-compress/releases/latest" target="_blank" rel="noopener" style="color:#7fd6ff">Windows 桌面版</a>。';
-  n.hidden = false;
-  setTimeout(() => (n.hidden = true), 6000);
-}
-
 $('#pick').addEventListener('click', async () => {
-  if (!xk) return showWebNote();
-  const files = await xk.pickFiles();
-  if (files.length) await addPaths(files);
+  const refs = await be.pick();
+  if (refs.length) await addRefs(refs);
 });
 $('#sample').addEventListener('click', () => void addSample());
 
 async function addSample(demo = false): Promise<Item | null> {
-  if (!xk) {
-    showWebNote();
-    return null;
-  }
-  setStatus('正在準備範例影片…');
+  setStatus(isWeb ? '正在用瀏覽器產生範例影片（約 10 秒）…' : '正在準備範例影片…');
   try {
-    const f = await xk.media.sample();
-    const [it] = await addPaths([f], { demo });
+    const ref = await be.sample();
+    const [it] = await addRefs([ref], { demo });
     setStatus('準備好了');
-    return it ?? items.find((x) => x.path === f && x.status === 'ready') ?? null;
+    return it ?? items.find((x) => x.src.key === ref.key && x.status === 'ready') ?? null;
   } catch (e) {
     setStatus('範例影片產生失敗');
     toast(errText(e));
@@ -584,9 +584,10 @@ window.addEventListener('drop', (e) => {
   e.preventDefault();
   dragDepth = 0;
   drop.classList.remove('over');
-  if (!xk) return showWebNote();
-  const paths = [...(e.dataTransfer?.files ?? [])].map((f) => xk.pathOf(f)).filter(Boolean);
-  if (paths.length) void addPaths(paths);
+  if (!e.dataTransfer) return;
+  void be.fromDrop(e.dataTransfer).then((refs) => {
+    if (refs.length) void addRefs(refs);
+  });
 });
 drop.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' || e.key === ' ') $('#pick').click();
@@ -604,14 +605,14 @@ function openCompare(it: Item) {
   const pct = it.outSize! / it.size;
   const head = `<div class="cmp-head"><span class="name">${esc(it.name)}</span><span>原檔 ${fmtBytes(it.size)} → 壓縮後 ${fmtBytes(it.outSize!)}（${pct < 1 ? '-' : '+'}${Math.abs(Math.round((1 - pct) * 100))}%）</span><button type="button" class="x">✕ 關閉</button></div>`;
   if (it.kind === 'audio') {
-    d.innerHTML = `${head}<div class="cmp-audio"><div>原檔</div><audio controls src="${mediaUrl(it.path)}"></audio><div>壓縮後</div><audio controls src="${mediaUrl(it.out)}"></audio></div>`;
+    d.innerHTML = `${head}<div class="cmp-audio"><div>原檔</div><audio controls src="${be.srcUrl(it.src)}"></audio><div>壓縮後</div><audio controls src="${be.outUrl(it.out)}"></audio></div>`;
   } else {
     const tag = it.kind === 'image' ? 'img' : 'video';
     const attrs = tag === 'video' ? ' muted playsinline preload="auto"' : ' draggable="false"';
     d.innerHTML = `${head}
       <div class="cmp-stage" style="--x:50%;aspect-ratio:${it.info.width || 16} / ${it.info.height || 9}">
-        <${tag} class="before" src="${mediaUrl(it.path)}"${attrs}></${tag}>
-        <${tag} class="after" src="${mediaUrl(it.out)}"${tag === 'video' ? ' playsinline preload="auto"' : attrs}></${tag}>
+        <${tag} class="before" src="${be.srcUrl(it.src)}"${attrs}></${tag}>
+        <${tag} class="after" src="${be.outUrl(it.out)}"${tag === 'video' ? ' playsinline preload="auto"' : attrs}></${tag}>
         <div class="cmp-line"></div><span class="cmp-tag l">原檔 ${fmtBytes(it.size)}</span><span class="cmp-tag r">壓縮後 ${fmtBytes(it.outSize!)}</span>
       </div>
       ${tag === 'video' ? '<div class="cmp-ctrl"><button type="button" class="play">▶</button><input type="range" class="seek" min="0" max="1000" value="0"><span class="time">0:00</span></div>' : '<div class="cmp-ctrl"><span class="time">左右拖曳白線，比較原檔（左）和壓縮後（右）的畫質。滾輪可放大。</span></div>'}`;
@@ -724,7 +725,7 @@ function openTrim(it: Item) {
   let b = it.trimEnd || dur;
   const d = document.createElement('dialog');
   d.className = 'trim';
-  const media = it.kind === 'video' ? `<video src="${mediaUrl(it.path)}" controls playsinline preload="auto"></video>` : `<audio src="${mediaUrl(it.path)}" controls style="width:100%;margin:16px 0 0"></audio>`;
+  const media = it.kind === 'video' ? `<video src="${be.srcUrl(it.src)}" controls playsinline preload="auto"></video>` : `<audio src="${be.srcUrl(it.src)}" controls style="width:100%;margin:16px 0 0"></audio>`;
   d.innerHTML = `${media}<div class="trim-body">
     <div class="trim-range"><div class="track"></div><div class="sel"></div><input type="range" class="ra" min="0" max="${dur}" step="0.1"><input type="range" class="rb" min="0" max="${dur}" step="0.1"></div>
     <div class="trim-row">開始 <input type="text" class="ta"> <button type="button" class="ghost small seta">設為目前畫面</button>
@@ -814,7 +815,9 @@ function openTrim(it: Item) {
 
 window.xkApp = {
   addSample: async () => (await addSample(true))?.id ?? null,
-  addPaths: async (paths: string[]) => (await addPaths(paths)).map((x) => x.id),
+  addPaths: async (paths: string[]) => (await addRefs(await be.fromPaths(paths))).map((x) => x.id),
+  addFiles: async (files: File[]) => (await addRefs(files.map((f, i) => ({ key: `t${Date.now()}-${i}`, name: f.name, dir: '', size: f.size, file: f })))).map((x) => x.id),
+  web: () => isWeb,
   setTab,
   setMode: (m) => setSetting('mode', m),
   setSetting: (k, v) => setSetting(k as keyof Settings, v as never),
@@ -836,13 +839,11 @@ window.xkApp = {
   wait: () => runDone,
   items: () => items.map((x) => ({ id: x.id, name: x.name, kind: x.kind, status: x.status, size: x.size, outSize: x.outSize ?? 0, out: x.out ?? '', progress: x.progress, error: x.error ?? '', summary: x.summary, warnings: x.warnings, demo: !!x.demo })),
   remove: (id: string) => {
-    const i = items.findIndex((x) => x.id === id);
-    if (i >= 0 && items[i].status !== 'running') items.splice(i, 1);
-    renderQueue();
+    const it = items.find((x) => x.id === id);
+    if (it) removeItem(it);
   },
   removeDemo: () => {
-    for (let i = items.length - 1; i >= 0; i--) if (items[i].demo && items[i].status !== 'running') items.splice(i, 1);
-    renderQueue();
+    for (const it of items.filter((x) => x.demo)) removeItem(it);
   },
   openCompare: (id: string) => {
     const it = items.find((x) => x.id === id);
@@ -863,17 +864,31 @@ window.xkApp = {
 
 // --- 啟動 ----------------------------------------------------------------------------
 
-function init() {
+async function init() {
   $('#ver').textContent = `v${__APP_VERSION__}`;
   $('#guide-btn .mini-robot').innerHTML = ROBOT_SVG;
   $('.empty-robot').innerHTML = ROBOT_SVG;
   $('#guide-btn').addEventListener('click', () => void startGuide());
+  document.body.classList.toggle('web', isWeb);
   buildForm();
+  if (isWeb) {
+    const web = await import('./web-engine');
+    be = web.webBackend();
+    // 線上版：硬體加速由瀏覽器自動決定、存檔用下載
+    ui.outMode = 'same';
+    $('#drop .drop-text span').textContent = '檔案只在你的瀏覽器裡處理，不會上傳・MP4、MOV、MKV、WebM、AVI、GIF、JPG、PNG、WebP、MP3、WAV…';
+    if (!web.webCodecsAvailable()) {
+      const n = $('#web-note');
+      n.textContent = '這個瀏覽器不支援 WebCodecs 硬體編碼，會改用比較慢的 FFmpeg 模式。建議使用最新版 Chrome、Edge 或 Safari。';
+      n.hidden = false;
+      setTimeout(() => (n.hidden = true), 9000);
+    }
+  }
   syncForm();
   renderQueue();
   initUpdateButton(__APP_VERSION__);
-  if (xk) {
-    void xk.hw().then((h) => {
+  if (!isWeb) {
+    void be.hw().then((h) => {
       hwInfo = h;
       fillHwOptions();
       refreshPlans();
@@ -884,7 +899,10 @@ function init() {
     hwInfo = { nvenc: false, qsv: false, amf: false, videotoolbox: false, hevc: { nvenc: false, qsv: false, amf: false, videotoolbox: false } };
     fillHwOptions();
   }
+  appReady = true;
   guideOnFirstRun();
 }
 
-init();
+let appReady = false;
+window.xkApp.ready = () => appReady;
+void init();

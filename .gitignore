@@ -4,3 +4,4 @@ release
 *.log
 CLAUDE.local.md
 .claude
+e2e/media

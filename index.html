@@ -19,6 +19,7 @@
       </div>
       <div class="spacer"></div>
       <button type="button" id="guide-btn" class="ghost pill" title="語音動態教學"><span class="mini-robot"></span>語音教學</button>
+      <a id="get-desktop" class="pill-link web-only" href="https://github.com/achir1015/xiaoke-compress/releases/latest" target="_blank" rel="noopener" title="下載 Windows／Mac 桌面版（更快、支援顯示卡加速）">💻 桌面版</a>
       <button type="button" class="ghost pill xk-update" title="檢查更新">⟳ 檢查更新</button>
       <span id="ver" class="ver"></span>
     </header>
@@ -42,6 +43,7 @@
         <div id="queue-head">
           <span id="queue-sum">還沒有檔案</span>
           <div class="spacer"></div>
+          <button type="button" id="dl-all" class="ghost small web-only">⬇ 全部下載</button>
           <button type="button" id="clear-done" class="ghost small">清除已完成</button>
           <button type="button" id="clear-all" class="ghost small">全部清除</button>
         </div>
@@ -152,7 +154,7 @@
                     <option value="webm">WebM</option>
                   </select>
                 </div>
-                <div class="field">
+                <div class="field desktop-only">
                   <label for="hw">硬體加速</label>
                   <select id="hw">
                     <option value="off">關閉（畫質最穩定）</option>
@@ -160,7 +162,7 @@
                   </select>
                   <small id="hw-note" class="muted"></small>
                 </div>
-                <div class="field">
+                <div class="field desktop-only">
                   <label for="speed">壓縮速度</label>
                   <select id="speed">
                     <option value="0">快速</option>
@@ -249,12 +251,12 @@
           </div>
 
           <div class="field out" id="f-out">
-            <label>輸出位置</label>
-            <div class="seg" id="outMode">
+            <label><span class="desktop-only">輸出位置</span><span class="web-only">輸出檔名</span></label>
+            <div class="seg desktop-only" id="outMode">
               <button type="button" data-v="same">與原檔同資料夾</button>
               <button type="button" data-v="custom">自訂資料夾</button>
             </div>
-            <div class="inline" data-show="outMode=custom">
+            <div class="inline desktop-only" data-show="outMode=custom">
               <input type="text" id="outDir" readonly placeholder="請選擇資料夾" />
               <button type="button" id="pick-out" class="ghost small">選擇…</button>
             </div>

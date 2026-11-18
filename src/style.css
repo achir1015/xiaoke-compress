@@ -58,6 +58,10 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 .muted { color: var(--muted); }
 .spacer { flex: 1; }
 [hidden] { display: none !important; }
+body.web .desktop-only, body:not(.web) .web-only { display: none !important; }
+.pill-link { display: inline-flex; align-items: center; gap: 4px; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line); color: var(--accent); text-decoration: none; font-weight: 600; }
+.pill-link:hover { border-color: var(--accent-2); background: var(--panel-2); }
+.acts .dl { background: var(--go); border-color: var(--go); color: #fff; font-weight: 600; }
 
 /* --- 頁首 --- */
 #top { display: flex; align-items: center; gap: 12px; padding: 10px 18px; background: var(--panel); border-bottom: 1px solid var(--line); }
@@ -244,8 +248,20 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 .xk-dialog button:not(.ghost) { background: var(--go); color: #fff; border-color: var(--go); }
 
 /* --- 窄螢幕（手機、平板直放） --- */
+button, .pill-link { white-space: nowrap; }
 @media (max-width: 860px) {
   body { overflow: auto; display: block; }
+  #top { padding: 8px 12px; gap: 8px; flex-wrap: wrap; }
+  #top .logo { width: 38px; height: 38px; }
+  #top h1 { font-size: 16px; }
+  #top .title { flex: 1 1 200px; min-width: 0; }
+  #top .spacer { display: none; }
+  #top button, #top .pill-link { padding: 5px 10px; font-size: 13px; }
+  #layout { padding: 10px; }
+  #queue-head { flex-wrap: wrap; }
+  #queue-sum { flex: 1 1 100%; }
+  .status { max-width: 40%; font-size: 12.5px; }
+  button.go { padding: 9px 16px; font-size: 15px; }
   #layout { grid-template-columns: 1fr; }
   #queue { overflow: visible; }
   #settings { overflow: visible; }
