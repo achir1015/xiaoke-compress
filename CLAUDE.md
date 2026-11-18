@@ -11,7 +11,7 @@
 ## 專案是什麼
 
 影片／圖片／音訊壓縮工具。構想參考 CompressO（AGPL）與 RedPanda 線上壓縮，**沒有用它們的程式碼**，本專案 MIT。
-平台順序：Windows（v1.0.0 完成）→ Mac → 線上版（ffmpeg.wasm）→ iPhone／iPad（線上安裝）→ Android。
+平台順序：Windows（v1.0.0）→ Mac（v1.1.0）→ 線上版（ffmpeg.wasm）→ iPhone／iPad（線上安裝）→ Android。
 外殼、語音教學、更新的寫法沿用同系列 `xiaoke-screw`。
 
 - `src/engine.ts`：純函式。解析 `ffmpeg -i` 的 stderr（含旋轉、封面圖）、依設定產生 FFmpeg 參數（品質 CRF／指定大小兩趟／原檔比例、自動降解析度、硬體編碼 nvenc/qsv/amf/videotoolbox、圖片 JPG/WebP/PNG 減色、音訊 MP3/M4A/Opus），以及預估大小。線上版要共用。
@@ -35,6 +35,8 @@ python scripts/make_icon.py                   # 圖示（小柯＋被箭頭壓�
 
 - 2026-11-18 Windows v1.0.0：已 /S 安裝到 %LOCALAPPDATA%\Programs\XiaokeCompress（桌面＋開始選單捷徑），安裝檔副本在 `../安裝檔`；開發版與已安裝版 e2e 27 項全過（含 Intel QSV 硬體加速、教學）。
 - 2026-11-18 使用者同意後建立公開 repo https://github.com/achir1015/xiaoke-compress（main），v1.0.0 Release 手動上傳安裝版＋免安裝版（無 CI，發佈說明 .github/release-notes.md）；e2e/update-check.mjs 實測已安裝版讀得到 v1.0.0 與安裝檔。沒有 gh CLI：用 git credential fill 取 token 打 API。
+
+- 2026-11-18 v1.1.0 Mac 版：`.github/workflows/build.yml` 推 package.json 版本即建 win＋mac-arm64＋mac-x64 並發 Release（notes 在 .github/release-notes.md）；mac-x64 在 arm64 runner 上用 npm_config_arch=x64 讓 ffmpeg-static 下載 x86_64 FFmpeg；build/adhoc-sign.cjs 先單獨簽 Contents/Resources/bin/ffmpeg 再 --deep 簽整個 App。Mac 硬體加速 VideoToolbox（Intel 不支援 -q:v，品質模式換算位元率＋allow_sw）。Intel Mac（yu-juhwu@192.168.6.32，macOS 26.3）實機 `scripts/mac-install-test.sh <dmg> --guide` 27 項通過（測試資料夾 ~/Developer/xiaoke-compress-test，只放 e2e 與 scripts，素材用 App 內附 FFmpeg 產生）；Apple 晶片 dmg 確認 App 與 FFmpeg 都是 arm64、簽章通過（沒實機）。Windows 程式內更新 1.0.0→1.1.0 實測成功（e2e/update-install.mjs）。等 CI：`GITHUB_TOKEN=… node e2e/wait-ci.mjs`。
 
 ## 坑
 
