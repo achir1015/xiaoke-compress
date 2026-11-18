@@ -1,4 +1,9 @@
 # 小柯機器人MP4影片壓縮工具
+<img width="512" height="512" alt="image" src="https://github.com/user-attachments/assets/11853fef-9d38-4d6f-a18c-c0e84ea5a295" />
+示範
+
+https://github.com/user-attachments/assets/ccf413aa-00d8-4201-9962-4baef69e6d4b
+
 
 <img src="public/icon-192.png" width="96" align="right" alt="" />
 
