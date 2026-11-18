@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#165099" />
+    <meta name="description" content="小柯機器人MP4影片壓縮工具：影片、圖片、音訊一鍵壓縮成小檔案" />
+    <title>小柯機器人MP4影片壓縮工具</title>
+    <link rel="icon" type="image/png" href="./favicon.png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+  </head>
+  <body>
+    <header id="top">
+      <img class="logo" src="./logo.png" alt="" />
+      <div class="title">
+        <h1>小柯機器人MP4影片壓縮工具</h1>
+        <p>影片・圖片・音訊，一鍵壓成小檔案</p>
+      </div>
+      <div class="spacer"></div>
+      <button type="button" id="guide-btn" class="ghost pill" title="語音動態教學"><span class="mini-robot"></span>語音教學</button>
+      <button type="button" class="ghost pill xk-update" title="檢查更新">⟳ 檢查更新</button>
+      <span id="ver" class="ver"></span>
+    </header>
+
+    <main id="layout">
+      <section id="left">
+        <div id="drop" tabindex="0">
+          <div class="drop-art" aria-hidden="true">
+            <svg viewBox="0 0 64 64"><rect x="10" y="14" width="44" height="36" rx="7" fill="#f46e28"/><circle cx="26" cy="32" r="8" fill="#fff"/><path d="M24 28v8l7-4z" fill="#f46e28"/><rect x="36" y="27" width="12" height="3" rx="1.5" fill="#ffe2cd"/><rect x="36" y="34" width="9" height="3" rx="1.5" fill="#ffe2cd"/><circle cx="50" cy="46" r="11" fill="#1ebe82"/><path d="M50 40v12M45 47l5 5 5-5" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="drop-text">
+            <strong>把影片、圖片或音訊拖曳到這裡</strong>
+            <span>可一次加入很多個檔案・MP4、MOV、MKV、WebM、AVI、GIF、JPG、PNG、WebP、MP3、WAV…</span>
+          </div>
+          <div class="drop-btns">
+            <button type="button" id="pick" class="primary">＋ 選擇檔案</button>
+            <button type="button" id="sample" class="ghost">試用範例影片</button>
+          </div>
+        </div>
+
+        <div id="queue-head">
+          <span id="queue-sum">還沒有檔案</span>
+          <div class="spacer"></div>
+          <button type="button" id="clear-done" class="ghost small">清除已完成</button>
+          <button type="button" id="clear-all" class="ghost small">全部清除</button>
+        </div>
+        <ul id="queue"></ul>
+        <div id="empty" class="empty">
+          <div class="empty-robot"></div>
+          <p>加入檔案後，小柯會列出每個檔案的大小、長度與解析度，<br />按下方的「開始壓縮」就會一個一個處理。</p>
+        </div>
+      </section>
+
+      <aside id="settings">
+        <div class="tabs" role="tablist" id="kind-tabs">
+          <button type="button" role="tab" data-tab="video" class="on">🎬 影片</button>
+          <button type="button" role="tab" data-tab="image">🖼️ 圖片</button>
+          <button type="button" role="tab" data-tab="audio">🎵 音訊</button>
+        </div>
+        <div id="scroll">
+          <!-- 影片 -->
+          <div class="panel" data-panel="video">
+            <div class="field" id="f-mode">
+              <label>壓縮方式</label>
+              <div class="seg" id="mode">
+                <button type="button" data-v="quality">品質優先</button>
+                <button type="button" data-v="size">指定大小</button>
+                <button type="button" data-v="percent">原檔比例</button>
+              </div>
+            </div>
+
+            <div class="field" data-show="mode=quality" id="f-quality">
+              <label>壓縮強度</label>
+              <div class="presets" id="presets"></div>
+              <div class="slider-row">
+                <span class="muted">檔案小</span>
+                <input type="range" id="quality" min="0" max="100" step="1" />
+                <span class="muted">畫質好</span>
+                <output id="quality-out"></output>
+              </div>
+            </div>
+
+            <div class="field" data-show="mode=size" id="f-size">
+              <label for="targetMB">目標大小</label>
+              <div class="inline">
+                <input type="number" id="targetMB" min="0.5" max="100000" step="0.5" />
+                <span>MB（每個檔案）</span>
+              </div>
+              <div class="chips" id="size-chips">
+                <button type="button" data-mb="8">8 MB</button>
+                <button type="button" data-mb="10">10 MB</button>
+                <button type="button" data-mb="25">25 MB（Email）</button>
+                <button type="button" data-mb="50">50 MB</button>
+                <button type="button" data-mb="100">100 MB</button>
+                <button type="button" data-mb="300">300 MB（LINE）</button>
+              </div>
+              <p class="hint">小柯會算出剛好的位元率，用「兩趟壓縮」精準控制大小；目標太小時會自動降低解析度。</p>
+            </div>
+
+            <div class="field" data-show="mode=percent" id="f-percent">
+              <label>壓成原檔的</label>
+              <div class="slider-row">
+                <input type="range" id="percent" min="5" max="90" step="5" />
+                <output id="percent-out"></output>
+              </div>
+            </div>
+
+            <details id="adv" class="adv">
+              <summary>進階設定</summary>
+              <div class="grid2">
+                <div class="field">
+                  <label for="res">解析度</label>
+                  <select id="res">
+                    <option value="auto">自動（建議）</option>
+                    <option value="orig">維持原樣</option>
+                    <option value="2160">4K（2160p）</option>
+                    <option value="1440">2K（1440p）</option>
+                    <option value="1080">1080p</option>
+                    <option value="720">720p</option>
+                    <option value="480">480p</option>
+                    <option value="360">360p</option>
+                    <option value="240">240p</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="fps">影格率</label>
+                  <select id="fps">
+                    <option value="0">維持原樣</option>
+                    <option value="60">60 fps</option>
+                    <option value="30">30 fps</option>
+                    <option value="24">24 fps</option>
+                    <option value="15">15 fps</option>
+                    <option value="10">10 fps</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="codec">編碼</label>
+                  <select id="codec">
+                    <option value="h264">H.264（相容性最好）</option>
+                    <option value="h265">H.265（更小，同畫質省約 40%）</option>
+                    <option value="vp9">VP9（網頁用）</option>
+                    <option value="av1">AV1（最小，但很慢）</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="container">輸出格式</label>
+                  <select id="container">
+                    <option value="mp4">MP4</option>
+                    <option value="mov">MOV</option>
+                    <option value="mkv">MKV</option>
+                    <option value="webm">WebM</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="hw">硬體加速</label>
+                  <select id="hw">
+                    <option value="off">關閉（畫質最穩定）</option>
+                    <option value="auto">自動</option>
+                  </select>
+                  <small id="hw-note" class="muted"></small>
+                </div>
+                <div class="field">
+                  <label for="speed">壓縮速度</label>
+                  <select id="speed">
+                    <option value="0">快速</option>
+                    <option value="1">標準</option>
+                    <option value="2">慢但檔案更小</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="audio">聲音</label>
+                  <select id="audio">
+                    <option value="keep">保留</option>
+                    <option value="mute">移除聲音（靜音）</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="audioKbps">聲音品質</label>
+                  <select id="audioKbps">
+                    <option value="192">192 kb/s（高）</option>
+                    <option value="128">128 kb/s（標準）</option>
+                    <option value="96">96 kb/s</option>
+                    <option value="64">64 kb/s（語音）</option>
+                  </select>
+                </div>
+              </div>
+              <label class="check"><input type="checkbox" id="stripMeta" /> 移除拍攝資訊（GPS 位置、裝置型號等中繼資料）</label>
+            </details>
+          </div>
+
+          <!-- 圖片 -->
+          <div class="panel" data-panel="image" hidden>
+            <div class="field">
+              <label for="imageFormat">輸出格式</label>
+              <select id="imageFormat">
+                <option value="same">與原檔相同</option>
+                <option value="jpg">JPG（照片）</option>
+                <option value="webp">WebP（最小）</option>
+                <option value="png">PNG（透明背景）</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>圖片品質</label>
+              <div class="slider-row">
+                <span class="muted">檔案小</span>
+                <input type="range" id="imageQuality" min="10" max="100" step="1" />
+                <span class="muted">畫質好</span>
+                <output id="imageQuality-out"></output>
+              </div>
+              <p class="hint">PNG 會減少顏色數（類似 pngquant），品質 100 為無損壓縮。</p>
+            </div>
+            <div class="field">
+              <label for="imageMax">最長邊</label>
+              <select id="imageMax">
+                <option value="0">維持原尺寸</option>
+                <option value="3840">3840 像素（4K）</option>
+                <option value="2560">2560 像素</option>
+                <option value="1920">1920 像素</option>
+                <option value="1280">1280 像素</option>
+                <option value="800">800 像素</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 音訊 -->
+          <div class="panel" data-panel="audio" hidden>
+            <div class="field">
+              <label for="audioFormat">輸出格式</label>
+              <select id="audioFormat">
+                <option value="mp3">MP3（到處都能播）</option>
+                <option value="m4a">M4A（AAC）</option>
+                <option value="opus">Opus（最小）</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="audioFileKbps">位元率</label>
+              <select id="audioFileKbps">
+                <option value="320">320 kb/s</option>
+                <option value="192">192 kb/s</option>
+                <option value="128">128 kb/s（推薦）</option>
+                <option value="96">96 kb/s</option>
+                <option value="64">64 kb/s（語音、Podcast）</option>
+                <option value="32">32 kb/s</option>
+              </select>
+            </div>
+            <label class="check"><input type="checkbox" id="audioMono" /> 轉成單聲道（錄音、Podcast 再小一半）</label>
+            <p class="hint">「指定大小」與「原檔比例」也適用於音訊檔，會自動算出位元率。</p>
+          </div>
+
+          <div class="field out" id="f-out">
+            <label>輸出位置</label>
+            <div class="seg" id="outMode">
+              <button type="button" data-v="same">與原檔同資料夾</button>
+              <button type="button" data-v="custom">自訂資料夾</button>
+            </div>
+            <div class="inline" data-show="outMode=custom">
+              <input type="text" id="outDir" readonly placeholder="請選擇資料夾" />
+              <button type="button" id="pick-out" class="ghost small">選擇…</button>
+            </div>
+            <div class="inline">
+              <span>檔名後面加上</span>
+              <input type="text" id="suffix" maxlength="30" style="width: 9em" />
+            </div>
+          </div>
+          <p class="credit">開發：吳玉柱 先生 與 Claude AI Opus 5.5<br />壓縮引擎：FFmpeg（LGPL／GPL）</p>
+        </div>
+      </aside>
+    </main>
+
+    <footer id="actions">
+      <div id="status" class="status">準備好了</div>
+      <div class="overall"><div id="overall-bar"></div></div>
+      <button type="button" id="stop" class="ghost" disabled>■ 停止</button>
+      <button type="button" id="start" class="go" disabled>▶ 開始壓縮</button>
+    </footer>
+
+    <div id="web-note" class="web-note" hidden></div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
